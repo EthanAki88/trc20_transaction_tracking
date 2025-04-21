@@ -1,10 +1,18 @@
+/**
+ * PaymentController handles all payment-related operations, including wallet assignment,
+ * payment status checks, and webhook handling for transaction notifications.
+ */
 class PaymentController {
     constructor(tokenviewService, userModel, walletModel) {
-        this.tokenviewService = tokenviewService;
-        this.userModel = userModel;
-        this.walletModel = walletModel;
+        this.tokenviewService = tokenviewService; // Service for interacting with Tokenview APIs
+        this.userModel = userModel; // Model for user-related database operations
+        this.walletModel = walletModel; // Model for wallet-related database operations
     }
 
+    /**
+     * Handle payment endpoint.
+     * This is a placeholder for future payment logic.
+     */
     async handlePayment(req, res) {
         try {
             res.status(200).json({ message: 'Payment endpoint reached successfully.' });
@@ -14,11 +22,16 @@ class PaymentController {
         }
     }
 
+    /**
+     * Assign a wallet to a user.
+     * If the user already has a wallet, return the existing wallet.
+     * Otherwise, assign an available wallet and monitor it using Tokenview.
+     */
     async assignWallet(req, res) {
         const { userId } = req.body;
 
         try {
-            console.log('Processing wallet assignment for userId:', userId); // Log the userId
+            console.log('Processing wallet assignment for userId:', userId);
 
             if (!userId) {
                 console.error('No userId provided in the request body');
@@ -26,40 +39,46 @@ class PaymentController {
             }
 
             // Check if the user already has a wallet assigned
-            const user = await this.userModel.getUserById(userId);
-            if (user.walletAddress) {
-                console.log(`User ${userId} already has a wallet assigned: ${user.walletAddress}`);
-                return res.status(200).json({ 
-                    message: 'User already has a wallet assigned.', 
-                    walletAddress: user.walletAddress 
+            const wallet = await this.walletModel.getWalletByUserId(userId);
+            if (wallet) {
+                console.log(`User ${userId} already has a wallet assigned: ${wallet.address}`);
+                return res.status(200).json({
+                    message: 'User already has a wallet assigned.',
+                    walletAddress: wallet.address
                 });
             }
 
             // Get an available wallet
-            const wallet = await this.walletModel.getAvailableWallet();
-            if (!wallet) {
-                console.warn('No available wallet addresses found'); // Log a warning
+            const availableWallet = await this.walletModel.getAvailableWallet();
+            if (!availableWallet) {
+                console.warn('No available wallet addresses found');
                 return res.status(400).json({ message: 'No available wallet addresses.' });
             }
 
-            console.log('Assigning wallet:', wallet.walletAddress); // Log the wallet address
+            console.log('Assigning wallet:', availableWallet.address);
 
             // Update the wallet's status and assign it to the user
-            await this.walletModel.assignWallet(wallet.id, userId);
+            await this.walletModel.assignWallet(availableWallet.id, userId);
 
-            // Update the user's walletAddress
-            await this.userModel.assignWalletToUser(userId, wallet.walletAddress);
+            // Call addAddress to monitor the wallet
+            const coin = 'trx'; // Replace with the appropriate coin abbreviation (e.g., 'eth', 'trx')
+            const result = await this.tokenviewService.addAddress(coin, availableWallet.address);
+            console.log('Wallet added for monitoring:', result);
 
-            res.status(200).json({ 
-                message: 'Wallet assigned successfully.', 
-                walletAddress: wallet.walletAddress 
+            res.status(200).json({
+                message: 'Wallet assigned and added for monitoring successfully.',
+                walletAddress: availableWallet.address
             });
         } catch (error) {
-            console.error('Error in assignWallet:', error); // Log the error
+            console.error('Error in assignWallet:', error);
             res.status(500).json({ message: 'Failed to assign wallet.', error: error.message });
         }
     }
 
+    /**
+     * Check the payment status of a transaction.
+     * Fetches the transaction status from Tokenview and updates the user's virtual money if successful.
+     */
     async checkPaymentStatus(req, res) {
         const { transactionId } = req.params;
 
@@ -81,17 +100,60 @@ class PaymentController {
         }
     }
 
+    /**
+     * Handle webhook notifications from Tokenview.
+     * Processes transaction data, updates the database, and removes the wallet from monitoring if successful.
+     */
     async handleWebhook(req, res) {
         try {
-            const { transactionHash, blockHeight, from, to, value, timestamp } = req.body;
+            const { address, txid, time, confirmations, value, coin, height, tokenAddress, tokenSymbol, tokenValue } = req.body;
 
             console.log('Received webhook notification:', req.body);
 
-            // Process the transaction data (e.g., update database, notify user)
-            // Example: Log the transaction details
-            console.log(`Transaction Hash: ${transactionHash}`);
-            console.log(`From: ${from}, To: ${to}, Value: ${value}`);
-            console.log(`Block Height: ${blockHeight}, Timestamp: ${timestamp}`);
+            // Log the transaction details
+            console.log(`Transaction Hash: ${txid}`);
+            console.log(`Address: ${address}`);
+            console.log(`Token Address: ${tokenAddress}`);
+            console.log(`Token Symbol: ${tokenSymbol}`);
+            console.log(`Token Value: ${tokenValue}`);
+            console.log(`Coin: ${coin}`);
+            console.log(`Confirmations: ${confirmations}`);
+            console.log(`Block Height: ${height}`);
+            console.log(`Timestamp: ${time}`);
+
+            // Check if the transaction is successful
+            if (parseFloat(tokenValue) > 0) {
+                console.log(`Transaction successful for address: ${address}, adding to transaction history.`);
+
+                // Add transaction history to the database
+                const user = await this.userModel.getUserByWalletAddress(address);
+                if (user) {
+                    await this.userModel.addTransactionHistory({
+                        userId: user.id,
+                        address,
+                        tokenValue,
+                        tokenSymbol,
+                        tokenAddress,
+                        txid,
+                        time
+                    });
+                    console.log('Transaction history added to database.');
+
+                    // Update wallet status to "success"
+                    await this.walletModel.updateWalletStatus(address, 'success');
+                    console.log(`Wallet status updated to "success" for address: ${address}`);
+
+                    // Set wallet address in the user's table
+                    await this.userModel.updateWalletAddress(user.id, address);
+                    console.log(`Wallet address set for user ID: ${user.id}`);
+                } else {
+                    console.warn(`No user found for address: ${address}`);
+                }
+
+                // Call removeAddress to stop monitoring the wallet
+                const result = await this.tokenviewService.removeAddress(coin.toLowerCase(), address);
+                console.log('Address removed from monitoring:', result);
+            }
 
             // Respond to Tokenview to confirm receipt
             res.status(200).send('ok');
@@ -102,4 +164,5 @@ class PaymentController {
     }
 }
 
-export default PaymentController; // Ensure this is exported as default
+// Export the PaymentController class
+export default PaymentController;

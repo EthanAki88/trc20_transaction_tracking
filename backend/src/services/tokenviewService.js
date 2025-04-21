@@ -1,15 +1,21 @@
 import axios from 'axios';
-// import crypto from 'crypto';
 
+/**
+ * TokenviewService handles all interactions with the Tokenview API, including
+ * monitoring addresses, managing webhooks, and retrieving transaction details.
+ */
 class TokenviewService {
-    constructor(db) {
-        this.db = db;
-        this.apiKey = process.env.TOKENVIEW_API_KEY; // Store your API key in the .env file
+    constructor() {
+        this.apiKey = process.env.TOKENVIEW_API_KEY; // API key stored in the .env file
         this.baseUrl = 'https://services.tokenview.io/vipapi'; // Base URL for VIP Tokenview API
         this.freeBaseUrl = 'http://freeapi.tokenview.io'; // Base URL for free Tokenview API
     }
 
-    // Check transaction status using the VIP API
+    /**
+     * Check transaction status using the VIP API.
+     * @param {string} transactionId - The transaction ID to check.
+     * @returns {Promise<Object>} - The transaction status.
+     */
     async checkTransaction(transactionId) {
         try {
             console.log(`Checking transaction status for ID: ${transactionId}`);
@@ -27,6 +33,52 @@ class TokenviewService {
         } catch (error) {
             console.error('Error checking transaction:', error);
             throw new Error('Failed to check transaction status.');
+        }
+    }
+
+    /**
+     * Add an address for monitoring using the VIP API.
+     * @param {string} coin - The coin abbreviation (e.g., 'trx', 'eth').
+     * @param {string} address - The wallet address to monitor.
+     * @returns {Promise<Object>} - The API response.
+     */
+    async addAddress(coin, address) {
+        try {
+            const response = await axios.get(`${this.baseUrl}/monitor/address/add/${coin}/${address}?apikey=${this.apiKey}`);
+
+            if (response.data && response.data.code === 1) {
+                console.log('Address added for monitoring successfully:', response.data);
+                return response.data;
+            } else {
+                console.error('Failed to add address for monitoring:', response.data);
+                throw new Error('Failed to add address for monitoring');
+            }
+        } catch (error) {
+            console.error('Error adding address for monitoring:', error);
+            throw new Error('Failed to add address for monitoring');
+        }
+    }
+
+    /**
+     * Remove an address from monitoring using the VIP API.
+     * @param {string} coin - The coin abbreviation (e.g., 'trx', 'eth').
+     * @param {string} address - The wallet address to remove from monitoring.
+     * @returns {Promise<Object>} - The API response.
+     */
+    async removeAddress(coin, address) {
+        try {
+            const response = await axios.get(`${this.baseUrl}/monitor/address/remove/${coin}/${address}?apikey=${this.apiKey}`);
+
+            if (response.data && response.data.code === 1) {
+                console.log('Address removed from monitoring successfully:', response.data);
+                return response.data;
+            } else {
+                console.error('Failed to remove address from monitoring:', response.data);
+                throw new Error('Failed to remove address from monitoring');
+            }
+        } catch (error) {
+            console.error('Error removing address from monitoring:', error);
+            throw new Error('Failed to remove address from monitoring');
         }
     }
 
@@ -138,42 +190,6 @@ class TokenviewService {
         }
     }
 
-    // Add address for monitoring using the VIP API
-    async addAddress(coin, address) {
-        try {
-            const response = await axios.get(`${this.baseUrl}/monitor/address/add/${coin}/${address}?apikey=${this.apiKey}`);
-
-            if (response.data && response.data.code === 1) {
-                console.log('Address added for monitoring successfully:', response.data);
-                return response.data;
-            } else {
-                console.error('Failed to add address for monitoring:', response.data);
-                throw new Error('Failed to add address for monitoring');
-            }
-        } catch (error) {
-            console.error('Error adding address for monitoring:', error);
-            throw new Error('Failed to add address for monitoring');
-        }
-    }
-
-    // Remove address from monitoring using the VIP API
-    async removeAddress(coin, address) {
-        try {
-            const response = await axios.get(`${this.baseUrl}/monitor/address/remove/${coin}/${address}?apikey=${this.apiKey}`);
-
-            if (response.data && response.data.code === 1) {
-                console.log('Address removed from monitoring successfully:', response.data);
-                return response.data;
-            } else {
-                console.error('Failed to remove address from monitoring:', response.data);
-                throw new Error('Failed to remove address from monitoring');
-            }
-        } catch (error) {
-            console.error('Error removing address from monitoring:', error);
-            throw new Error('Failed to remove address from monitoring');
-        }
-    }
-
     // List tracked addresses using the VIP API
     async listTrackedAddresses(coin, page = 0) {
         try {
@@ -209,14 +225,6 @@ class TokenviewService {
             throw new Error('Failed to retrieve webhook history');
         }
     }
-
-    // Validate Webhook Signature
-    // validateWebhookSignature(signingKey, requestBody, receivedSignature) {
-    //     const hmac = crypto.createHmac('sha256', signingKey);
-    //     hmac.update(requestBody, 'utf8');
-    //     const calculatedSignature = hmac.digest('hex');
-    //     return calculatedSignature === receivedSignature;
-    // }
 }
 
 export default new TokenviewService();

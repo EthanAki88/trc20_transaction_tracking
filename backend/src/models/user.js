@@ -1,17 +1,44 @@
-const { Schema, model } = require('mongoose');
+const { DataTypes } = require('sequelize');
+const sequelize = require('../config/db'); // Import your Sequelize instance
 
-const userSchema = new Schema({
+// Define the User model
+const User = sequelize.define('User', {
     walletAddress: {
-        type: String,
-        required: true,
-        unique: true
+        type: DataTypes.STRING,
+        allowNull: false, // Wallet address is required
+        unique: true, // Ensure wallet addresses are unique
+        validate: {
+            notEmpty: true, // Ensure the field is not empty
+            is: /^[a-zA-Z0-9]+$/i // Optional: Validate alphanumeric wallet addresses
+        }
     },
     virtualMoney: {
-        type: Number,
-        default: 0
+        type: DataTypes.DECIMAL(18, 8), // Use DECIMAL for precise financial calculations
+        allowNull: false,
+        defaultValue: 0, // Default virtual money balance
+        validate: {
+            min: 0 // Ensure the balance cannot be negative
+        }
+    },
+    createdAt: {
+        type: DataTypes.DATE,
+        allowNull: false,
+        defaultValue: DataTypes.NOW // Automatically set the creation date
+    },
+    updatedAt: {
+        type: DataTypes.DATE,
+        allowNull: false,
+        defaultValue: DataTypes.NOW // Automatically set the last updated date
+    }
+}, {
+    tableName: 'users', // Specify the table name in the database
+    timestamps: true, // Automatically manage `createdAt` and `updatedAt` fields
+    hooks: {
+        beforeUpdate: (user) => {
+            user.updatedAt = new Date(); // Update `updatedAt` before saving
+        }
     }
 });
 
-const User = model('User', userSchema);
-
+// Export the User model
 module.exports = User;
