@@ -1,8 +1,6 @@
-// filepath: d:\MY-DEV\React\jinkouyan\transaction-tracking-app\backend\src\models\walletModel.js
 import db from '../config/db.js';
 
 class WalletModel {
-    // Method to get an available wallet
     async getAvailableWallet() {
         return new Promise((resolve, reject) => {
             const query = 'SELECT * FROM wallets WHERE status = "available" LIMIT 1';
@@ -20,7 +18,22 @@ class WalletModel {
         });
     }
 
-    // Other wallet-related methods can be added here
+    async assignWallet(walletId, userId) {
+        return new Promise((resolve, reject) => {
+            const query = 'UPDATE wallets SET status = "pending", userId = ? WHERE id = ?';
+            db.query(query, [userId, walletId], (err, result) => {
+                if (err) {
+                    console.error('Error updating wallet status:', err);
+                    return reject(err);
+                }
+                if (result.affectedRows === 0) {
+                    console.warn('No wallet found with the given ID');
+                    return resolve(null);
+                }
+                resolve(result);
+            });
+        });
+    }
 }
 
 export default new WalletModel();
